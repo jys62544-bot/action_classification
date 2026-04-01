@@ -186,25 +186,33 @@ python replay.py --file path/to/syn_data.json
 
 ```
 RadarActionNet
-├── Backbone: RadarPoseNet (预训练)
-│   ├── PointEmbedding          # 点云特征嵌入
-│   ├── PositionalEncoding      # 3D 位置编码
-│   ├── SpatialLayers ×3        # 空间 Transformer（始终冻结）
-│   ├── MaskedMeanPool           # 掩码平均池化
-│   ├── TemporalLayers ×8       # 时序 Transformer（Finetune 阶段解冻）
-│   └── Head                     # 骨架回归头 → (B, T, 51)
 │
-└── ActionClassifier (分类头)
-    ├── LayerNorm                # 前置归一化
-    ├── CausalConv1D (k=5)       # 时序因果卷积
-    ├── Residual + LayerNorm     # 残差连接
+├── Backbone: RadarPoseNet (预训练)
+│   ├── PointEmbedding              # 点云特征嵌入
+│   ├── PositionalEncoding          # 3D 位置编码
+│   ├── SpatialLayers ×3            # 空间 Transformer（始终冻结）
+│   ├── MaskedMeanPool              # 掩码平均池化 → (B, T, 256)
+│   └── TemporalLayers ×8          # 时序 Transformer（Finetune 阶段解冻）
+│                                    # 输出 feat: (B, T, 256)
+│
+├── feat ─┬──→ Head                  # 骨架回归头 → skel_out: (B, T, 51)
+│         │     │
+│         │     ├──→ 骨架归一化      # 相对盆骨 + 身高归一化 → skel_normed: (B, T, 51)
+│         │     └──→ 运动速度特征    # 帧间差分(盆骨3D + 膝踝Z) → motion_vel: (B, T, 7)
+│         │
+│         └──→ cat[feat, skel_normed, motion_vel] → combined: (B, T, 314)
+│
+└── ActionClassifier (分类头)        # 输入 combined: (B, T, 314)
+    ├── LayerNorm                    # 前置归一化
+    ├── CausalConv1D (k=5)          # 时序因果卷积
+    ├── Residual + LayerNorm        # 残差连接
     └── MLP: 314 → 256 → 128 → 10  # 深层分类器
 ```
 
-分类头输入特征（314 维）：
-- 256d — Backbone 隐藏层特征
-- 51d — 归一化骨架姿态（相对盆骨 + 身高归一化）
-- 7d — 运动速度特征（盆骨 3D 速度 + 膝踝 Z 轴速度）
+分类头输入特征拼接（314 维）：
+- **256d** — TemporalLayers 输出的时序隐藏特征 `feat`
+- **51d** — Head 输出的骨架经归一化后的姿态特征（相对盆骨 + 身高归一化）
+- **7d** — 由骨架帧间差分计算的运动速度特征（盆骨 3D 速度 + 左右膝踝 Z 轴速度）
 
 ## 帧级标注工具
 
