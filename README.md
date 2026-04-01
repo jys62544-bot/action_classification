@@ -30,6 +30,7 @@
 
 ```
 classification_task/
+├── train_zd_v2.py           # RadarPoseNet 预训练脚本（骨架估计 backbone）
 ├── train_action.py          # 核心训练脚本（模型定义 + 训练循环）
 ├── data_split_action.py     # 数据预处理与切片
 ├── frame_labeler.py         # 混合动作序列的自动帧级标注
